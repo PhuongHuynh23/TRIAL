@@ -1,168 +1,380 @@
-﻿internal class Program
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+
+// ---------------------------------------------- Define Card class --------------------------------------------------
+public class Card
 {
-    private static void Main(string[] args)
+    public string Suit { get; private set; }
+    public string Rank { get; private set; }
+
+    public Card(string suit, string rank)
     {
-        //int[][] a = new int[4][];
-        //a[0] = new int[] { 1, 1, 1, 1, 1};
-        //    a[1] = new int[] { 2, 2 };
-        //a[2] = new int[] { 3, 3, 3, 3 };
-        //a[3] = new int[] { 4, 4 };
-
-        
-            Console.Write("Enter the number of row ");
-            int rows = Convert.ToInt16(Console.ReadLine());
-        int[][] a = new int[rows][];
-        inputrandom(a, rows);
-        print(a);
-        maxinthearray(a);
-        maxintherow(a);
-        sortArray(a);
-        print(a);
-        
-        isPrimeinArray(a);
-
-        Console.Write("Enter a number you want to find ");
-        int num = int.Parse(Console.ReadLine());
-
-        }
-    static void inputrandom(int[][] a, int rows)
-    {
-        Random random = new Random();
-        for(int i = 0; i < rows; i++) 
-        {
-            Console.Write($"Enter the col in {i}th row "); int col = int.Parse(Console.ReadLine());
-            a[i] = new int[col];
-            for(int j = 0; j < col; j++)
-            {
-                a[i][j] = random.Next(10, 50);
-            }
-
-        }
+        Suit = suit;
+        Rank = rank;
     }
-    static void print(int[][] a)
-    {
-        for(int i = 0;i < a.Length;i++)
-        {
-            for (int j = 0;j < a[i].Length;j++)
-            {
-                Console.Write(a[i][j] + " ");
-            }
-            Console.WriteLine();
 
+    public override string ToString()
+    {
+        return $"{Rank} of {Suit}";
+    }
+}
+
+// ------------------------------------------------- Define Deck class -----------------------------------------------
+public class Deck
+{
+    private List<Card> cards;
+    private static readonly string[] suits = { "Hearts", "Diamonds", "Clubs", "Spades" };
+    private static readonly string[] ranks = { "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A" };
+    private Random random = new Random();
+
+    public Deck()
+    {
+        cards = new List<Card>();
+        foreach (var suit in suits)
+        {
+            foreach (var rank in ranks)
+            {
+                cards.Add(new Card(suit, rank));
+            }
+        }
+        Shuffle();
+    }
+
+    public void Shuffle()
+    {
+        int n = cards.Count;
+        while (n > 1)
+        {
+            n--;
+            int k = random.Next(n + 1);
+            Card value = cards[k];
+            cards[k] = cards[n];
+            cards[n] = value;
         }
     }
 
-    static void maxinthearray(int[][] a)
+    public Card DealCard()
     {
-        int max = 0;
-        for(int i = 0; i < a.Length ; i++)
+        if (cards.Count > 0)
         {
-            for(int j = 0; j <  a[i].Length;j++)
-            {
-                if (a[i][j] > max)
-                    max = a[i][j];
-            }
+            var card = cards[^1];
+            cards.RemoveAt(cards.Count - 1);
+            return card;
         }
+        return null;
+    }
+}
 
-        Console.WriteLine($"The biggest number in an array is {max}");
+// ----------------------------------------------- Define Player class -----------------------------------------------
+public class Player
+{
+    public string Name { get; private set; }
+    public List<Card> Hand { get; private set; }
+    public int Chips { get; private set; }
+    public int CurrentBet { get; private set; }
+    public bool InGame { get; private set; }
+    public bool IsAI { get; private set; }
+
+    public Player(string name, bool isAI = false)
+    {
+        Name = name;
+        Hand = new List<Card>();
+        Chips = 100;
+        CurrentBet = 0;
+        InGame = true;
+        IsAI = isAI;
     }
 
-    static void maxintherow(int[][] a)
+    public void ReceiveCard(Card card)
     {
-        int[] maxrow = new int[a.Length];
-        for(int i = 0; i < a.Length ; i++)
+        Hand.Add(card);
+    }
+
+    public string ShowHand()
+    {
+        return string.Join(", ", Hand);
+    }
+
+    public void Bet(int amount)
+    {
+        if (amount > Chips)
+            throw new Exception("Not enough chips to bet that amount.");
+
+        Chips -= amount;
+        CurrentBet += amount;
+    }
+
+    public void Fold()
+    {
+        InGame = false;
+    }
+
+    public void ResetBet()
+    {
+        CurrentBet = 0;
+    }
+}
+
+// --------------------------------------------- Define PokerGame class -----------------------------------------------
+public class PokerGame
+{
+    private Deck deck;
+    private List<Player> players;
+    private List<Card> communityCards;
+    private int pot;
+
+    public PokerGame(List<Player> players)
+    {
+        deck = new Deck();
+        this.players = players;
+        communityCards = new List<Card>();
+        pot = 0;
+    }
+
+    public void DealHands()
+    {
+        for (int i = 0; i < 2; i++)
         {
-            for(int j = 0  ; j < a[i].Length ; j++)
+            foreach (var player in players)
             {
-                int rowma = 0;
-                if (a[i][j] > rowma)
+                player.ReceiveCard(deck.DealCard());
+            }
+        }
+    }
+
+    public void DealCommunityCards(int num)
+    {
+        for (int i = 0; i < num; i++)
+        {
+            communityCards.Add(deck.DealCard());
+        }
+    }
+
+    public string ShowCommunityCards()
+    {
+        return string.Join(", ", communityCards);
+    }
+
+    public int AiDecision(Player player, int highestBet)
+    {
+        if (!player.InGame) return highestBet;
+
+        Console.WriteLine($"{player.Name}'s (AI) turn. Current chips: {player.Chips}");
+        string action;
+        if (highestBet == 0 || new Random().Next(2) == 0)
+        {
+            action = "call";
+        }
+        else
+        {
+            action = "raise";
+        }
+
+        switch (action)
+        {
+            case "call":
+                int betAmount = highestBet - player.CurrentBet;
+                player.Bet(betAmount);
+                pot += betAmount;
+                Console.WriteLine($"{player.Name} calls with {betAmount} chips.");
+                break;
+            case "raise":
+                int raiseAmount = new Random().Next(1, player.Chips);
+                int totalBet = highestBet + raiseAmount;
+                player.Bet(totalBet - player.CurrentBet);
+                pot += totalBet - player.CurrentBet;
+                Console.WriteLine($"{player.Name} raises to {totalBet} chips.");
+                highestBet = totalBet;
+                break;
+        }
+
+        return highestBet;
+    }
+
+    public int PlayerDecision(Player player, int highestBet)
+    {
+        if (!player.InGame) return highestBet;
+
+        Console.WriteLine($"{player.Name}'s turn. Current chips: {player.Chips}");
+        Console.WriteLine($"{player.Name}, do you want to fold, call ({highestBet}), or raise?");
+        string action = Console.ReadLine().ToLower();
+
+        switch (action)
+        {
+            case "fold":
+                player.Fold();
+                Console.WriteLine($"{player.Name} folds.");
+                break;
+            case "call":
+                int betAmount = highestBet - player.CurrentBet;
+                player.Bet(betAmount);
+                pot += betAmount;
+                Console.WriteLine($"{player.Name} calls with {betAmount} chips.");
+                break;
+            case "raise":
+                Console.WriteLine("Enter the raise amount: ");
+                int raiseAmount = int.Parse(Console.ReadLine());
+                int totalBet = highestBet + raiseAmount;
+                player.Bet(totalBet - player.CurrentBet);
+                pot += totalBet - player.CurrentBet;
+                Console.WriteLine($"{player.Name} raises to {totalBet} chips.");
+                highestBet = totalBet;
+                break;
+            default:
+                player.Fold();
+                Console.WriteLine("Invalid action. Folding by default.");
+                break;
+        }
+
+        return highestBet;
+    }
+
+    public void BettingRound()
+    {
+        Console.WriteLine("\nStarting a new betting round....");
+        int highestBet = 0;
+
+        foreach (var player in players)
+        {
+            highestBet = player.IsAI ? AiDecision(player, highestBet) : PlayerDecision(player, highestBet);
+        }
+
+        foreach (var player in players)
+        {
+            player.ResetBet();
+        }
+    }
+
+    public void EvaluateHands()
+    {
+        int winner = 0;
+        foreach (var player in players)
+        {
+            if (player.InGame)
+            {
+                int handStrength = EvaluateHandStrength(player.Hand);
+                Console.WriteLine($"{player.Name}'s hand strength: {handStrength}");
+            }
+        }
+        foreach (var player in players)
+        {
+            if (player.InGame)
+            {
+                int handStrength = EvaluateHandStrength(player.Hand);
+                if (handStrength > winner)
                 {
-                    maxrow[i]  = a[i][j];
-                    
+                    winner = handStrength;
+                }
+
+            }
+        }
+        foreach (var player in players)
+        {
+            if (player.InGame)
+            {
+                int handStrength = EvaluateHandStrength(player.Hand);
+                if(handStrength == winner)
+                {
+                    Console.WriteLine($"The winner is {player.Name}");
+
                 }
             }
-
-        }
-        for(int k = 0; k < a.Length ; k++) 
-        {
-            Console.Write($"The largest number in row {k} is {maxrow[k]} ");
-            Console.WriteLine();
         }
     }
-
-    static void sortrow(int[] a)
+    public int EvaluateHandStrength(List<Card> hand)
     {
-        
-        for(int i = 0; i < a.Length - 1; i++)
+        Dictionary<string, int> rankCount = new Dictionary<string, int>();
+
+        // Count the occurrence of each rank
+        foreach (var card in hand)
         {
-            for(int j = 0; j < a.Length - i - 1 ; j++)
+            if (rankCount.ContainsKey(card.Rank))
+                rankCount[card.Rank]++;
+            else
+                rankCount[card.Rank] = 1;
+        }
+
+        // Check for pairs, three of a kind, etc.
+        if (rankCount.ContainsValue(3))
+        {
+            return 3;  // Three of a kind
+        }
+        else if (rankCount.ContainsValue(2))
+        {
+            return 2;  // Pair
+        }
+
+        // Return 1 for high card
+        return 1;
+    }
+
+    public void Play()
+    {
+        // Initial deal
+        DealHands();
+
+        // Show players' hands
+        foreach (var player in players)
+        {
+            Console.WriteLine($"{player.Name}'s hand: {player.ShowHand()}");
+        }
+
+        // First betting round 
+        BettingRound();
+
+        // Deal community cards 
+        Console.WriteLine("\nDealing the Flop...");
+        DealCommunityCards(3);
+        Console.WriteLine($"Community Cards: {ShowCommunityCards()}");
+
+        // Second betting round
+        BettingRound();
+
+        Console.WriteLine("\nDealing the Turn...");
+        DealCommunityCards(1);
+        Console.WriteLine($"Community Cards: {ShowCommunityCards()}");
+
+        // Third betting round 
+        BettingRound();
+
+        Console.WriteLine("\nDealing the River...");
+        DealCommunityCards(1);
+        Console.WriteLine($"Community Cards: {ShowCommunityCards()}");
+
+        // Final betting round
+        BettingRound();
+
+        // Showdown (simplified)
+        foreach (var player in players)
+        {
+            if (player.InGame)
             {
-                if (a[j] > a[j + 1])
-                {
-                    int temp = a[j];
-                    a[j] = a[j + 1];
-                    a[j + 1] = temp;   
-                }
+                Console.WriteLine($"{player.Name}'s final hand: {player.ShowHand()}");
             }
         }
-    }
-    static void sortArray(int[][] a)
-    {
-        for(int i = 0;i < a.Length;i++)
-        {
-            sortrow(a[i]);
-        }
-    }
+        Console.WriteLine($"Total pot: {pot} chips");
 
-    static bool isPrime(int a)
-    {
-        
-        for (int i = 2; i < a ; i++)
-        {
-            if (a % i == 0)
-            {
-                return false;
-            }
-        }
-        return true;
+        Console.WriteLine("\nEvaluating hands...");
+        EvaluateHands();
     }
-    static void isPrimeinArray(int[][] a)
-    {
-        Console.Write("Prime numbers are ");
-        for(int i = 0; i <a.Length;i++)
-        {
-            for (int j = 0; j < a[i].Length; j++)
-            {
-                if (isPrime(a[i][j]))
-                {
-                    Console.Write(a[i][j] + " ");
-                }
-            }
-        }
-        
-    }
+}
 
-    static int[] PositionRow(int[] a, int numToFind)
+// Main program to initiate a game
+public class Program
+{
+    public static void Main()
     {
-        int[] la;
-        for(int i = 0; i < a.Length; i++)
+        var players = new List<Player>
         {
-            if (a[i] == numToFind)
-            {
-                return la[i];
-            }
-        }
+            new Player("Alice"),
+            new Player("Cat"),
+            new Player("Dog"),
+            new Player("Bob (AI)", true)
+            
+        };
 
-        
-    }
-    static void PositionArray(int[][] a, int numToFind)
-    {
-        for(int i = 0; i <a.Length; i++)
-        {
-            for(int j = 0; j < a[i].Length; j++)
-            {
-
-            }
-        }
+        PokerGame game = new PokerGame(players);
+        game.Play();
     }
 }
